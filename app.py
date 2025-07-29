@@ -7,6 +7,21 @@ from llama_index.core.settings import Settings
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
+# 🔐 Password Protection Setup
+PASSWORD = "Woodchucks2025!"
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    pw = st.text_input("Enter password to access School-GPT:", type="password")
+    if pw == PASSWORD:
+        st.session_state["authenticated"] = True
+        st.success("✅ Open Sesame! Welcome!")
+    else:
+        st.warning("⛔ Nuh uh. Try Again.")
+        st.stop()
+
 # Load your OpenAI API key from .env
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
