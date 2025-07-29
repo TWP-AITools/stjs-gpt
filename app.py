@@ -16,7 +16,7 @@ if "tried_password" not in st.session_state:
     st.session_state["tried_password"] = False
 
 if not st.session_state["authenticated"]:
-    pw = st.text_input("Enter password to access Sunny Side School Assistant:", type="password")
+    pw = st.text_input("Enter the magic word to access St. John Public School Assistant:", type="password")
 
     if pw:
         st.session_state["tried_password"] = True
@@ -79,8 +79,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ✅ App Header with Logo and Title
-st.image("OIP.webp", width=100)
-st.markdown("<h1 style='color:#228B22;'>St. John Public School Assistant</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (but you can call me Chucky if you'd like!). I'm your super-serious, super-smart school assistant! Ask away — policies, referrals, handbooks, you name it!</p>", unsafe_allow_html=True)
 
 # ✅ Question Input
