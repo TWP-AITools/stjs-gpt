@@ -31,7 +31,7 @@ if not st.session_state["authenticated"]:
     else:
         st.stop()
 
-# ✅ Load OpenAI API key
+# ✅ Load OpenAI API key and configure models
 load_dotenv()
 client = openai.OpenAI()
 Settings.llm = LlamaOpenAI(model="gpt-4o")
@@ -47,7 +47,7 @@ with st.spinner("Indexing school documents..."):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Send Button Fix, Hide Tooltip
+# ✅ Custom CSS Styling
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
@@ -57,6 +57,7 @@ st.markdown("""
         background-color: #121212;
         color: white;
     }
+
     .stTextInput > div > div > input,
     .stTextArea > div > textarea {
         background-color: #1e1e1e;
@@ -65,28 +66,34 @@ st.markdown("""
         border-radius: 5px;
         padding: 8px;
         resize: none;
-    }
-    .stTextArea > div > textarea {
-        height: 100px !important;
-        overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
     }
-    textarea:focus::after {
-        content: none !important;
+
+    .stTextArea > div > textarea {
+        height: 100px !important;
+        overflow-y: auto;
     }
+
+    [data-baseweb="textarea"] + div {
+        display: none !important; /* Hides 'Ctrl+Enter' hint */
+    }
+
     .stTextArea label, .stTextInput label {
         color: #228B22;
     }
+
     .stButton > button {
         background-color: #228B22 !important;
         color: white !important;
         border: none !important;
-        border-radius: 5px;
-        padding: 0.5em 1em;
-        font-weight: bold;
+        border-radius: 5px !important;
+        padding: 0.5em 1em !important;
+        font-weight: bold !important;
         box-shadow: none !important;
+        background-image: none !important;
     }
+
     .response-box {
         border: 1px solid #228B22;
         padding: 1rem;
@@ -102,33 +109,34 @@ st.markdown("""
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I'm your super-serious, super-smart school assistant. Ask me about forms, standards, procedures, or anything else Chucks!</p>", unsafe_allow_html=True)
 
-# ✅ Display prior conversation history
+# ✅ Display chat history
 for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ Input form with text wrapping and Send button
-with st.form(key="chat_form", clear_on_submit=True):
-    user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
-    submitted = st.form_submit_button("Send")
-
-if submitted and user_input:
+# ✅ Input and submission
+user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
+if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
+        # Base system prompt
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
 
+        # 1-turn memory
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
+        # Add current prompt and doc context
         messages.append({
             "role": "user",
             "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
         })
 
+        # Get GPT response
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -136,6 +144,8 @@ if submitted and user_input:
         )
         answer = response.choices[0].message.content
 
+        # Save + display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+
 
