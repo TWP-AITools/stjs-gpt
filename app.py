@@ -114,9 +114,11 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ Input and submission
-user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
-if st.button("Send") and user_input:
+# ✅ Main input: simple text_input that submits with Enter
+user_input = st.text_input("Ask Chad/Chucky a Question:", key="user_input")
+
+# ✅ Process and respond
+if user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
@@ -147,5 +149,3 @@ if st.button("Send") and user_input:
         # Save + display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
-
-
