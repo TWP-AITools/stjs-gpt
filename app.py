@@ -31,7 +31,7 @@ if not st.session_state["authenticated"]:
     else:
         st.stop()
 
-# ✅ Load OpenAI API key and configure models
+# ✅ Load OpenAI API key
 load_dotenv()
 client = openai.OpenAI()
 Settings.llm = LlamaOpenAI(model="gpt-4o")
@@ -47,7 +47,7 @@ with st.spinner("Indexing school documents..."):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Custom CSS Styling
+# ✅ Custom Styling
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
@@ -57,24 +57,29 @@ st.markdown("""
         background-color: #121212;
         color: white;
     }
-
+    .stTextInput > div > div > input,
     .stTextArea > div > textarea {
-        background-color: #1e1e1e !important;
-        color: white !important;
-        border: 1px solid #228B22 !important;
-        border-radius: 5px !important;
-        height: 100px !important;
-        white-space: pre-wrap !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        resize: none !important;
+        background-color: #1e1e1e;
+        color: white;
+        border: 1px solid #228B22;
+        border-radius: 5px;
         padding: 8px;
+        resize: none;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
-
-    .stTextArea label {
+    .stTextArea label, .stTextInput label {
         color: #228B22;
     }
-
+    .stButton > button {
+        background-color: #228B22 !important;
+        color: white !important;
+        border: none;
+        border-radius: 5px;
+        padding: 0.5em 1em;
+        font-weight: bold;
+    }
     .response-box {
         border: 1px solid #228B22;
         padding: 1rem;
@@ -83,11 +88,6 @@ st.markdown("""
         color: white;
         margin-top: 1rem;
     }
-
-    /* Hide Ctrl+Enter tip */
-    [data-baseweb="textarea"] + div {
-        display: none !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -95,34 +95,35 @@ st.markdown("""
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I'm your super-serious, super-smart school assistant. Ask me about forms, standards, procedures, or anything else Chucks!</p>", unsafe_allow_html=True)
 
-# ✅ Display chat history
+# ✅ Display prior conversation history
 for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User input field
+# ✅ User Input
 user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
 
-# ✅ Submit on Enter
-if user_input and st.session_state.get("last_input") != user_input:
-    st.session_state["last_input"] = user_input
+if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
+        # Base system prompt
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
 
-        # 1-turn memory
+        # One-turn memory
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
+        # Add new user question with doc context
         messages.append({
             "role": "user",
             "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
         })
 
+        # Generate response
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -130,5 +131,6 @@ if user_input and st.session_state.get("last_input") != user_input:
         )
         answer = response.choices[0].message.content
 
+        # Save & display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
