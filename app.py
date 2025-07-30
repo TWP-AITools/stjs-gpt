@@ -66,8 +66,9 @@ st.markdown("""
         border-radius: 5px;
         padding: 8px;
         resize: none;
-        white-space: pre-wrap;
-        word-wrap: break-word;
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     .stTextArea > div > textarea {
@@ -76,7 +77,7 @@ st.markdown("""
     }
 
     [data-baseweb="textarea"] + div {
-        display: none !important; /* Hides 'Ctrl+Enter' hint */
+        display: none !important;
     }
 
     .stTextArea label, .stTextInput label {
@@ -114,7 +115,7 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ Main input: simple text_input that submits with Enter
+# ✅ Main input: text_input with Enter to submit and wrapping
 user_input = st.text_input("Ask Chad/Chucky a Question:", key="user_input")
 
 # ✅ Process and respond
@@ -122,7 +123,6 @@ if user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
-        # Base system prompt
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
@@ -132,13 +132,11 @@ if user_input:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
-        # Add current prompt and doc context
         messages.append({
             "role": "user",
             "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
         })
 
-        # Get GPT response
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -146,6 +144,6 @@ if user_input:
         )
         answer = response.choices[0].message.content
 
-        # Save + display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+
