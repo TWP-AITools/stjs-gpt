@@ -58,41 +58,33 @@ st.markdown("""
         color: white;
     }
 
-    .stTextInput > div > div > input,
-    .stTextArea > div > textarea {
+    .stTextInput > div > div > input {
         background-color: #1e1e1e;
         color: white;
         border: 1px solid #228B22;
         border-radius: 5px;
         padding: 8px;
-        resize: none;
-        white-space: pre-wrap !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
     }
 
     .stTextArea > div > textarea {
+        background-color: #1e1e1e !important;
+        color: white !important;
+        border: 1px solid #228B22 !important;
+        border-radius: 5px !important;
         height: 100px !important;
-        overflow-y: auto;
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        resize: none !important;
+        padding: 8px;
+    }
+
+    .stTextArea label {
+        color: #228B22;
     }
 
     [data-baseweb="textarea"] + div {
         display: none !important;
-    }
-
-    .stTextArea label, .stTextInput label {
-        color: #228B22;
-    }
-
-    .stButton > button {
-        background-color: #228B22 !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 5px !important;
-        padding: 0.5em 1em !important;
-        font-weight: bold !important;
-        box-shadow: none !important;
-        background-image: none !important;
     }
 
     .response-box {
@@ -115,11 +107,10 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ Main input: text_input with Enter to submit and wrapping
-user_input = st.text_input("Ask Chad/Chucky a Question:", key="user_input")
+# ✅ User input (Enter submits, wraps text)
+user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
 
-# ✅ Process and respond
-if user_input:
+if user_input and not st.session_state.get("already_responded", False):
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
@@ -144,6 +135,11 @@ if user_input:
         )
         answer = response.choices[0].message.content
 
+        # Save and display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+        st.session_state.already_responded = True
 
+# Reset flag when text area is cleared
+if not user_input:
+    st.session_state.already_responded = False
