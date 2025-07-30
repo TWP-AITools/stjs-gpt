@@ -47,7 +47,7 @@ with st.spinner("Indexing school documents..."):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Clean Send Button
+# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Send Button Fix
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
@@ -78,10 +78,11 @@ st.markdown("""
     .stButton > button {
         background-color: #228B22 !important;
         color: white !important;
-        border: none;
+        border: none !important;
         border-radius: 5px;
         padding: 0.5em 1em;
         font-weight: bold;
+        box-shadow: none !important;
     }
     .response-box {
         border: 1px solid #228B22;
@@ -103,29 +104,28 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User input
-user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
-if st.button("Send") and user_input:
+# ✅ Input form for wrapping + Send button
+with st.form(key="chat_form", clear_on_submit=True):
+    user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
+    submitted = st.form_submit_button("Send")
+
+if submitted and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
-        # Create base system prompt
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
 
-        # Include 1-turn memory if available
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
-        # Add the new user prompt and context
         messages.append({
             "role": "user",
             "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
         })
 
-        # Get response from OpenAI
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -133,6 +133,6 @@ if st.button("Send") and user_input:
         )
         answer = response.choices[0].message.content
 
-        # Save to history and display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+
