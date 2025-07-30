@@ -37,17 +37,21 @@ client = openai.OpenAI()
 Settings.llm = LlamaOpenAI(model="gpt-4o")
 Settings.embed_model = OpenAIEmbedding()
 
-# ✅ Load documents from 'docs' folder and index them
-with st.spinner("Indexing school documents..."):
+# ✅ Cached document loading/indexing
+@st.cache_resource
+def load_index():
     documents = SimpleDirectoryReader("docs").load_data()
     index = VectorStoreIndex.from_documents(documents)
-    query_engine = index.as_query_engine()
+    return index.as_query_engine()
+
+with st.spinner("Indexing school documents..."):
+    query_engine = load_index()
 
 # ✅ Setup session state for chat history
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Custom Styling
+# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Clean Send Button
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
@@ -65,9 +69,12 @@ st.markdown("""
         border-radius: 5px;
         padding: 8px;
         resize: none;
+    }
+    .stTextArea > div > textarea {
+        height: 100px !important;
+        overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
-        overflow-wrap: break-word;
     }
     .stTextArea label, .stTextInput label {
         color: #228B22;
@@ -100,30 +107,29 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User Input
+# ✅ User input and Send Button
 user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
-
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
-        # Base system prompt
+        # Create base system prompt
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
 
-        # One-turn memory
+        # Include 1-turn memory if available
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
-        # Add new user question with doc context
+        # Add the new user prompt and context
         messages.append({
             "role": "user",
             "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
         })
 
-        # Generate response
+        # Get response from OpenAI
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -131,6 +137,6 @@ if st.button("Send") and user_input:
         )
         answer = response.choices[0].message.content
 
-        # Save & display
+        # Save to history and display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
