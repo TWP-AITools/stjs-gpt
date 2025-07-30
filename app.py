@@ -47,10 +47,11 @@ with st.spinner("Indexing school documents..."):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Styling: Nunito Font, Dark Mode, Forest Green
+# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Clean Send Button
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
+
     html, body, [class*="st-"] {
         font-family: 'Nunito', sans-serif;
         background-color: #121212;
@@ -60,13 +61,27 @@ st.markdown("""
     .stTextArea > div > textarea {
         background-color: #1e1e1e;
         color: white;
+        border: 1px solid #228B22;
+        border-radius: 5px;
+        padding: 8px;
+        resize: none;
+    }
+    .stTextArea > div > textarea {
+        height: 100px !important;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
     }
     .stTextArea label, .stTextInput label {
         color: #228B22;
     }
     .stButton > button {
-        background-color: #228B22;
-        color: white;
+        background-color: #228B22 !important;
+        color: white !important;
+        border: none;
+        border-radius: 5px;
+        padding: 0.5em 1em;
+        font-weight: bold;
     }
     .response-box {
         border: 1px solid #228B22;
@@ -81,7 +96,7 @@ st.markdown("""
 
 # ✅ App Header
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I'm your laid-back, polite school assistant. Ask me anything about forms, standards, procedures, or whatever you're curious about.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I'm your super-serious, super-smart school assistant. Ask me about forms, standards, procedures, or anything else Chucks!</p>", unsafe_allow_html=True)
 
 # ✅ Display prior conversation history
 for turn in st.session_state.chat_history:
@@ -89,8 +104,7 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
 # ✅ User input
-user_input = st.text_input("Ask Chad/Chucky a Question:", key="user_input")
-
+user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
