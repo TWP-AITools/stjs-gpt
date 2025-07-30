@@ -47,7 +47,7 @@ with st.spinner("Indexing school documents..."):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Send Button Fix
+# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Send Button Fix, Hide Tooltip
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
@@ -71,6 +71,9 @@ st.markdown("""
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
+    }
+    textarea:focus::after {
+        content: none !important;
     }
     .stTextArea label, .stTextInput label {
         color: #228B22;
@@ -104,7 +107,7 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ Input form for wrapping + Send button
+# ✅ Input form with text wrapping and Send button
 with st.form(key="chat_form", clear_on_submit=True):
     user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
     submitted = st.form_submit_button("Send")
