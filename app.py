@@ -56,11 +56,11 @@ st.markdown("""
         background-color: #121212;
         color: white;
     }
-    .stTextInput > div > div > input {
+    .stTextArea > div > textarea {
         color: white;
         background-color: #1e1e1e;
     }
-    .stTextInput label {
+    .stTextArea label {
         color: #228B22;
     }
     .stButton > button {
@@ -82,12 +82,39 @@ st.markdown("""
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (but you can call me Chucky if you'd like!). I'm your super-serious, super-smart school assistant! Ask away — policies, referrals, handbooks, you name it!</p>", unsafe_allow_html=True)
 
-# ✅ Question Input
-user_input = st.text_input("Ask Chad/Chucky a Question!:")
+# ✅ Multi-line input box for better UX
+user_input = st.text_area("Ask Chad/Chucky a Question:", height=100)
 
-# ✅ GPT Response Box
+# ✅ Smart document-aware inference
 if user_input:
     with st.spinner("Let me cook..."):
-        response = query_engine.query(user_input)
-        st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {response.response}</div>", unsafe_allow_html=True)
+        # Step 1: Retrieve matching content
+        retrieved_response = query_engine.query(user_input)
+        context = retrieved_response.response
+
+        # Step 2: GPT-4o inference with fallback reasoning
+        prompt = f"""
+You are a helpful school assistant named Chucky. A user has asked the following question:
+
+\"{user_input}\"
+
+Here is some relevant information from school documents you have access to:
+
+{context}
+
+Using both the user's question and the document info above, give the best, most helpful answer you can. If the question is vague, infer what they probably mean and respond clearly.
+"""
+
+        full_response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful school assistant who answers clearly and accurately."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.4
+        )
+
+        answer = full_response.choices[0].message.content
+        st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+
 
