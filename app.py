@@ -58,14 +58,6 @@ st.markdown("""
         color: white;
     }
 
-    .stTextInput > div > div > input {
-        background-color: #1e1e1e;
-        color: white;
-        border: 1px solid #228B22;
-        border-radius: 5px;
-        padding: 8px;
-    }
-
     .stTextArea > div > textarea {
         background-color: #1e1e1e !important;
         color: white !important;
@@ -92,7 +84,7 @@ st.markdown("""
         margin-top: 1rem;
     }
 
-    /* Remove Ctrl+Enter hint */
+    /* Hide Ctrl+Enter tip */
     [data-baseweb="textarea"] + div {
         display: none !important;
     }
@@ -108,12 +100,12 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User input field (Enter to submit)
-with st.form(key="chat_form", clear_on_submit=True):
-    user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
-    submitted = st.form_submit_button("")
+# ✅ User input field
+user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
 
-if submitted and user_input:
+# ✅ Submit on Enter
+if user_input and st.session_state.get("last_input") != user_input:
+    st.session_state["last_input"] = user_input
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
