@@ -46,7 +46,7 @@ with st.spinner("Indexing school documents..."):
     index = VectorStoreIndex.from_documents(documents)
     query_engine = index.as_query_engine()
 
-# ✅ Nunito Font, Dark Mode, Forest Green, Logo Styling
+# ✅ Styling - Dark mode, green accent, Nunito font, and fixed textarea wrap
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
@@ -75,24 +75,28 @@ st.markdown("""
         color: white;
         margin-top: 1rem;
     }
+    textarea {
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        overflow-x: hidden !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# ✅ App Header with Logo and Title
+# ✅ App Header
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (but you can call me Chucky if you'd like!). I'm your super-serious, super-smart school assistant! Ask away — policies, referrals, handbooks, you name it!</p>", unsafe_allow_html=True)
 
-# ✅ Multi-line input box for better UX
+# ✅ User Input (now multi-line and wraps)
 user_input = st.text_area("Ask Chad/Chucky a Question:", height=100)
 
-# ✅ Smart document-aware inference
+# ✅ Inference + GPT Answer
 if user_input:
     with st.spinner("Let me cook..."):
-        # Step 1: Retrieve matching content
         retrieved_response = query_engine.query(user_input)
         context = retrieved_response.response
 
-        # Step 2: GPT-4o inference with fallback reasoning
         prompt = f"""
 You are a helpful school assistant named Chucky. A user has asked the following question:
 
@@ -116,5 +120,7 @@ Using both the user's question and the document info above, give the best, most 
 
         answer = full_response.choices[0].message.content
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+
+
 
 
