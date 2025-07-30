@@ -83,10 +83,6 @@ st.markdown("""
         color: #228B22;
     }
 
-    [data-baseweb="textarea"] + div {
-        display: none !important;
-    }
-
     .response-box {
         border: 1px solid #228B22;
         padding: 1rem;
@@ -94,6 +90,11 @@ st.markdown("""
         background-color: #1e1e1e;
         color: white;
         margin-top: 1rem;
+    }
+
+    /* Remove Ctrl+Enter hint */
+    [data-baseweb="textarea"] + div {
+        display: none !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -107,10 +108,12 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User input (Enter submits, wraps text)
-user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
+# ✅ User input field (Enter to submit)
+with st.form(key="chat_form", clear_on_submit=True):
+    user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
+    submitted = st.form_submit_button("")
 
-if user_input and not st.session_state.get("already_responded", False):
+if submitted and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
@@ -135,11 +138,5 @@ if user_input and not st.session_state.get("already_responded", False):
         )
         answer = response.choices[0].message.content
 
-        # Save and display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
-        st.session_state.already_responded = True
-
-# Reset flag when text area is cleared
-if not user_input:
-    st.session_state.already_responded = False
