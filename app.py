@@ -1,14 +1,14 @@
 import streamlit as st
+import openai
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core.settings import Settings
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 # 🔐 Password Protection Setup
-PASSWORD = "Woodchucks2025!"  
+PASSWORD = "Woodchucks2025!"
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -17,7 +17,6 @@ if "tried_password" not in st.session_state:
 
 if not st.session_state["authenticated"]:
     pw = st.text_input("Enter the magic word to access St. John Public School Assistant:", type="password")
-
     if pw:
         st.session_state["tried_password"] = True
         if pw == PASSWORD:
@@ -32,35 +31,37 @@ if not st.session_state["authenticated"]:
     else:
         st.stop()
 
-# ✅ Load API key and initialize OpenAI client
+# ✅ Load OpenAI API key
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# ✅ LlamaIndex setup with GPT-4o
+client = openai.OpenAI()
 Settings.llm = LlamaOpenAI(model="gpt-4o")
 Settings.embed_model = OpenAIEmbedding()
 
-# ✅ Load documents
+# ✅ Load documents from 'docs' folder and index them
 with st.spinner("Indexing school documents..."):
     documents = SimpleDirectoryReader("docs").load_data()
     index = VectorStoreIndex.from_documents(documents)
     query_engine = index.as_query_engine()
 
-# ✅ Styling block
+# ✅ Setup session state for chat history
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# ✅ Styling: Nunito Font, Dark Mode, Forest Green
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
-
     html, body, [class*="st-"] {
         font-family: 'Nunito', sans-serif;
         background-color: #121212;
         color: white;
     }
+    .stTextInput > div > div > input,
     .stTextArea > div > textarea {
-        color: white;
         background-color: #1e1e1e;
+        color: white;
     }
-    .stTextArea label {
+    .stTextArea label, .stTextInput label {
         color: #228B22;
     }
     .stButton > button {
@@ -75,48 +76,49 @@ st.markdown("""
         color: white;
         margin-top: 1rem;
     }
-    textarea {
-        white-space: pre-wrap !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        overflow-x: hidden !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-# ✅ Title & greeting
+# ✅ App Header
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (but you can call me Chucky if you'd like!). I'm your super-serious, super-smart school assistant! Ask away — policies, referrals, handbooks, you name it!</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I'm your laid-back, polite school assistant. Ask me anything about forms, standards, procedures, or whatever you're curious about.</p>", unsafe_allow_html=True)
 
-# ✅ Input box with wrapping
-user_input = st.text_area("Ask Chad/Chucky a Question:", height=100)
+# ✅ Display prior conversation history
+for turn in st.session_state.chat_history:
+    st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ Response logic
-if user_input:
+# ✅ User input
+user_input = st.text_input("Ask Chad/Chucky a Question:", key="user_input")
+
+if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
-        retrieved_response = query_engine.query(user_input)
-        context = retrieved_response.response
+        doc_response = query_engine.query(user_input).response
 
-        prompt = f"""
-You are a helpful school assistant named Chucky. A user has asked the following question:
+        # Create base system prompt
+        messages = [
+            {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
+        ]
 
-\"{user_input}\"
+        # Include 1-turn memory if available
+        if len(st.session_state.chat_history) >= 1:
+            messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
+            messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
-Here is some relevant information from school documents you have access to:
+        # Add the new user prompt and context
+        messages.append({
+            "role": "user",
+            "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
+        })
 
-{context}
-
-Using both the user's question and the document info above, give the best, most helpful answer you can. If the question is vague, infer what they probably mean and respond clearly.
-"""
-
-        full_response = client.chat.completions.create(
+        # Get response from OpenAI
+        response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful school assistant who answers clearly and accurately."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             temperature=0.4
         )
+        answer = response.choices[0].message.content
 
-        answer = full_response.choices[0].message.content
+        # Save to history and display
+        st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
