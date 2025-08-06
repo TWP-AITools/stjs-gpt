@@ -113,18 +113,19 @@ if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
-        # 🔍 Infer if the user wants the counseling form
+        # 🔍 Add download link for counseling form if prompt mentions it
         download_link = ""
         trigger_keywords = ["counseling form", "referral form", "student counseling", "counseling request"]
         if any(kw in user_input.lower() for kw in trigger_keywords):
             raw_pdf_url = "https://raw.githubusercontent.com/TWP-AITools/stjs-gpt/main/docs/SJCounselingReferralForm.pdf"
             download_link = f"\n\n📄 [Download the Counseling Referral Form (PDF)]({raw_pdf_url})"
 
-        # Base prompt setup
+        # Base system prompt
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
 
+        # Include 1-turn memory
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
@@ -143,4 +144,3 @@ if st.button("Send") and user_input:
 
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
-✅ Next S
