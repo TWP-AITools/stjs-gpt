@@ -113,19 +113,18 @@ if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
-        # 🔍 Add download link for counseling form if prompt mentions it
+        # 🧠 Download link trigger (raw link to PDF)
         download_link = ""
         trigger_keywords = ["counseling form", "referral form", "student counseling", "counseling request"]
         if any(kw in user_input.lower() for kw in trigger_keywords):
             raw_pdf_url = "https://raw.githubusercontent.com/TWP-AITools/stjs-gpt/main/docs/SJCounselingReferralForm.pdf"
             download_link = f"\n\n📄 [Download the Counseling Referral Form (PDF)]({raw_pdf_url})"
 
-        # Base system prompt
+        # System + memory prompt
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
 
-        # Include 1-turn memory
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
@@ -135,6 +134,7 @@ if st.button("Send") and user_input:
             "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
         })
 
+        # Query LLM
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -142,5 +142,6 @@ if st.button("Send") and user_input:
         )
         answer = response.choices[0].message.content + download_link
 
+        # Show & save
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
