@@ -51,7 +51,7 @@ with st.spinner("Indexing school documents..."):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ✅ Styling: Nunito Font, Dark Mode, Forest Green, Clean Send Button
+# ✅ Styling
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito&display=swap');
@@ -102,41 +102,45 @@ st.markdown("""
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I'm your super-serious, super-smart school assistant. Ask me about forms, standards, procedures, or anything else Chucks!</p>", unsafe_allow_html=True)
 
-# ✅ Display prior conversation history
+# ✅ Display chat history
 for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User input and Send Button
+# ✅ User input and send button
 user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         doc_response = query_engine.query(user_input).response
 
-        # Create base system prompt
+        # 🔍 Infer if the user wants the counseling form
+        download_link = ""
+        trigger_keywords = ["counseling form", "referral form", "student counseling", "counseling request"]
+        if any(kw in user_input.lower() for kw in trigger_keywords):
+            raw_pdf_url = "https://raw.githubusercontent.com/TWP-AITools/stjs-gpt/main/docs/SJCounselingReferralForm.pdf"
+            download_link = f"\n\n📄 [Download the Counseling Referral Form (PDF)]({raw_pdf_url})"
+
+        # Base prompt setup
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
 
-        # Include 1-turn memory if available
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
-        # Add the new user prompt and context
         messages.append({
             "role": "user",
             "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
         })
 
-        # Get response from OpenAI
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             temperature=0.4
         )
-        answer = response.choices[0].message.content
+        answer = response.choices[0].message.content + download_link
 
-        # Save to history and display
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+✅ Next S
