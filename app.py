@@ -7,7 +7,7 @@ from llama_index.core.settings import Settings
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
-# --- Optional postprocessor (safe if missing) ---
+# --- Optional postprocessor (won't break if missing) ---
 try:
     from llama_index.core.postprocessor import SimilarityPostprocessor
     HAVE_SIM_POST = True
@@ -56,13 +56,28 @@ def norm(s: str) -> str:
 def fuzzy_ratio(a: str, b: str) -> float:
     return difflib.SequenceMatcher(a=norm(a), b=norm(b)).ratio()
 
+# ---------- Intent: only show downloads when explicitly requested ----------
+def wants_download(user_q: str) -> bool:
+    q = (user_q or "").lower()
+    keywords = [
+        "download", "attach", "attachment", "pdf", "file", "form",
+        "link", "open the form", "printable", "save a copy", "give me the",
+        "send me the", "provide the form", "share the form"
+    ]
+    return any(k in q for k in keywords)
+
 # ---------- Manifest (optional but recommended) ----------
+# Example manifest.json structure:
+# [
+#   {"path":"docs/SJCounselingReferralForm.pdf","title":"Counseling Referral Form","aliases":["counseling request","student counseling"],"keywords":["counsel","referral"]},
+#   {"path":"docs/SpedReferral.pdf","title":"Special Education Referral Form","aliases":["sped referral","special ed referral"],"keywords":["idea","evaluation"]}
+# ]
 def load_manifest():
     try:
         with open("manifest.json","r",encoding="utf-8") as f:
             items = json.load(f)
     except FileNotFoundError:
-        # fallback: build from files in /docs
+        # create from files in /docs as a fallback
         items = []
         if os.path.isdir("docs"):
             for fn in sorted(os.listdir("docs")):
@@ -86,7 +101,7 @@ def best_manifest_match(user_q: str):
     for item in MANIFEST:
         title = item.get("title") or os.path.basename(item["path"])
         cand_texts = [title] + item.get("aliases", []) + item.get("keywords", [])
-        cand_texts.append(os.path.basename(item["path"]))
+        cand_texts.append(os.path.basename(item["path"]))  # filename
         exact_hit = any(norm(ct) in qn or qn in norm(ct) for ct in cand_texts if ct)
         score = 1.1 if exact_hit else max((fuzzy_ratio(user_q, ct) for ct in cand_texts if ct), default=0.0)
         if score > best[1]:
@@ -96,6 +111,7 @@ def best_manifest_match(user_q: str):
 # ✅ Cached document loading/indexing
 @st.cache_resource
 def load_index():
+    # Attach simple metadata (title + path) so sources are cleaner
     def file_meta(pathlike):
         p = str(pathlike).replace("\\","/")
         rec = MANIFEST_BY_PATH.get(p, {})
@@ -112,6 +128,8 @@ def load_index():
     ).load_data()
 
     index = VectorStoreIndex.from_documents(documents)
+
+    # Build a query engine with tighter retrieval
     kwargs = dict(similarity_top_k=6)
     if HAVE_SIM_POST:
         kwargs["node_postprocessors"] = [SimilarityPostprocessor(similarity_cutoff=0.72)]
@@ -165,23 +183,13 @@ def collect_downloads(resp_obj, limit=3):
         files.append((abs_path, meta.get("title") or os.path.basename(abs_path)))
     return files
 
-# ✅ Simple intent detector: only show downloads if asked
-def wants_download(user_q: str) -> bool:
-    q = (user_q or "").lower()
-    keywords = [
-        "download", "attach", "attachment", "pdf", "file", "form",
-        "link", "open the form", "printable", "save a copy", "give me the"
-    ]
-    return any(k in q for k in keywords)
-
 # ✅ Display chat history
 for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User input, toggle, and send button
+# ✅ User input and send button
 user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
-show_docs_toggle = st.toggle("Show related documents", value=False)
 
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
@@ -201,8 +209,7 @@ if st.button("Send") and user_input:
                 retrieved_files = [(abs_direct, direct_title)] + retrieved_files
 
         has_downloads = len(retrieved_files) > 0
-        user_asked = wants_download(user_input)
-        show_downloads = (user_asked or show_docs_toggle) and has_downloads
+        show_downloads = wants_download(user_input) and has_downloads
 
         # ---- 3) Build LLM answer ----
         messages = [
@@ -211,8 +218,7 @@ if st.button("Send") and user_input:
                 "content": (
                     "You are a helpful, laid-back school assistant named Chad (aka Chucky). "
                     "Prefer exact document matches when the user names a form (title/filename/alias). "
-                    "Only offer downloads if the user asks for a file/link or the UI toggle is on; "
-                    "otherwise, answer concisely without attachments. "
+                    "Only offer downloads if the user asks for a file/link; otherwise, answer concisely without attachments. "
                     "Do NOT claim you cannot provide files."
                 )
             }
@@ -242,7 +248,7 @@ if st.button("Send") and user_input:
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
 
-        # ---- 5) Render downloads only when requested/toggled ----
+        # ---- 5) Render downloads only when explicitly requested ----
         if show_downloads:
             for abs_path, title in retrieved_files[:3]:
                 st.caption(f"Source: {title}")
