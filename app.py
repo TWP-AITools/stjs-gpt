@@ -111,38 +111,72 @@ for turn in st.session_state.chat_history:
 user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
-        doc_response = query_engine.query(user_input).response
+        # Keep full response object so we can grab sources
+        resp_obj = query_engine.query(user_input)
+        context_text = resp_obj.response
 
-        # 🔍 Add download link for counseling form if prompt mentions it
-        trigger_keywords = ["counseling form", "referral form", "student counseling", "counseling request"]
-        if any(kw in user_input.lower() for kw in trigger_keywords):
-            raw_pdf_url = "https://raw.githubusercontent.com/TWP-AITools/stjs-gpt/main/docs/SJCounselingReferralForm.pdf"
-            download_link = f"\n\n📄 [Download the Counseling Referral Form (PDF)]({raw_pdf_url})"
-        else:
-            download_link = ""
-
-        # System prompt
+        # Build chat messages
         messages = [
             {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
         ]
-
-        # One-turn memory
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
         messages.append({
             "role": "user",
-            "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{doc_response}"
+            "content": f"The user asked: {user_input}\n\nHere is the context I found in the documents:\n{context_text}"
         })
 
+        # Get LLM answer
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             temperature=0.4
         )
+        answer = response.choices[0].message.content
 
-        answer = response.choices[0].message.content + download_link
-
+        # Save & display answer
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
+
+        # Offer downloads for top 2–3 source docs
+        try:
+            shown = set()
+            for node in (resp_obj.source_nodes or [])[:3]:
+                meta = (node.metadata or {})
+
+                # Try common metadata keys for file path
+                path = (
+                    meta.get("file_path") or
+                    meta.get("path") or
+                    meta.get("source") or
+                    meta.get("filename") or
+                    ""
+                )
+                title = (
+                    meta.get("file_name") or
+                    os.path.basename(path) or
+                    meta.get("title") or
+                    "Document"
+                )
+
+                if not path:
+                    continue
+                abs_path = os.path.abspath(path)
+                if abs_path in shown or not os.path.exists(abs_path):
+                    continue
+                shown.add(abs_path)
+
+                st.caption(f"Source: {title}")
+
+                mime = "application/pdf" if abs_path.lower().endswith(".pdf") else "application/octet-stream"
+                with open(abs_path, "rb") as f:
+                    st.download_button(
+                        "Download file",
+                        data=f.read(),
+                        file_name=os.path.basename(abs_path),
+                        mime=mime
+                    )
+        except Exception as e:
+            st.caption(f"Sources unavailable: {e}")
