@@ -100,7 +100,29 @@ st.markdown("""
 
 # ✅ App Header
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I'm your super-serious, super-smart school assistant. Ask me about forms, standards, procedures, or anything else Chucks!</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). I can answer questions about school documents and even give you the actual form when it’s relevant. Ask away!</p>", unsafe_allow_html=True)
+
+# ✅ Helper to collect download candidates
+def collect_downloads(resp_obj, limit=3):
+    files = []
+    seen = set()
+    for node in (resp_obj.source_nodes or [])[:limit]:
+        meta = (node.metadata or {})
+        path = (
+            meta.get("file_path") or
+            meta.get("path") or
+            meta.get("source") or
+            meta.get("filename") or
+            ""
+        )
+        if not path:
+            continue
+        abs_path = os.path.abspath(path)
+        if abs_path in seen or not os.path.exists(abs_path):
+            continue
+        seen.add(abs_path)
+        files.append(abs_path)
+    return files
 
 # ✅ Display chat history
 for turn in st.session_state.chat_history:
@@ -111,13 +133,23 @@ for turn in st.session_state.chat_history:
 user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
-        # Keep full response object so we can grab sources
+        # Get context + possible download files
         resp_obj = query_engine.query(user_input)
         context_text = resp_obj.response
+        candidate_files = collect_downloads(resp_obj)
+        has_downloads = len(candidate_files) > 0
 
         # Build chat messages
         messages = [
-            {"role": "system", "content": "You are a helpful, laid-back school assistant named Chad (aka Chucky). Use the context provided to answer questions clearly and informally."}
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful, laid-back school assistant named Chad (aka Chucky). "
+                    "You can reference school documents, and the app may display download buttons for relevant forms. "
+                    "If a document seems relevant, say something like: 'You can download the form below.' "
+                    "Do NOT claim you cannot provide files."
+                )
+            }
         ]
         if len(st.session_state.chat_history) >= 1:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
@@ -136,47 +168,22 @@ if st.button("Send") and user_input:
         )
         answer = response.choices[0].message.content
 
+        # Programmatic guarantee: always append if downloads exist
+        if has_downloads:
+            answer += "\n\n📎 You can download the relevant form(s) below."
+
         # Save & display answer
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
 
-        # Offer downloads for top 2–3 source docs
-        try:
-            shown = set()
-            for node in (resp_obj.source_nodes or [])[:3]:
-                meta = (node.metadata or {})
-
-                # Try common metadata keys for file path
-                path = (
-                    meta.get("file_path") or
-                    meta.get("path") or
-                    meta.get("source") or
-                    meta.get("filename") or
-                    ""
-                )
-                title = (
-                    meta.get("file_name") or
-                    os.path.basename(path) or
-                    meta.get("title") or
-                    "Document"
-                )
-
-                if not path:
-                    continue
-                abs_path = os.path.abspath(path)
-                if abs_path in shown or not os.path.exists(abs_path):
-                    continue
-                shown.add(abs_path)
-
-                st.caption(f"Source: {title}")
-
-                mime = "application/pdf" if abs_path.lower().endswith(".pdf") else "application/octet-stream"
-                with open(abs_path, "rb") as f:
-                    st.download_button(
-                        "Download file",
-                        data=f.read(),
-                        file_name=os.path.basename(abs_path),
-                        mime=mime
-                    )
-        except Exception as e:
-            st.caption(f"Sources unavailable: {e}")
+        # Offer the downloads
+        for abs_path in candidate_files:
+            title = os.path.basename(abs_path) or "Document"
+            st.caption(f"Source: {title}")
+            mime = "application/pdf" if abs_path.lower().endswith(".pdf") else "application/octet-stream"
+            with open(abs_path, "rb") as f:
+                st.download_button(
+                    "Download file",
+                    data=f.read(),
+                    file_name=os.path.basename(abs_path),
+                    mime=mime
