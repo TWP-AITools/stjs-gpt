@@ -183,7 +183,8 @@ if st.button("Send") and user_input:
             mime = "application/pdf" if abs_path.lower().endswith(".pdf") else "application/octet-stream"
             with open(abs_path, "rb") as f:
                 st.download_button(
-                    "Download file",
+                    label="Download file",
                     data=f.read(),
                     file_name=os.path.basename(abs_path),
                     mime=mime
+                )
