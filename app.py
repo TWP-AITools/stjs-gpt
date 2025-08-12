@@ -159,7 +159,7 @@ st.markdown("""
 
 # ✅ App Header
 st.markdown("<h1 style='color:#228B22;'>🪓 St. John Public School Assistant</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:white;'>Hi, I'm <strong>Chad</strong> (aka Chucky). Name the exact form and I'll pull it, or ask your question and I'll find the best match.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:white;'>Hi, I'm <strong>Chucky</strong>. I'm your super smart, super serious school assistant. Ask me for a form or question and I will do my best to assist you!</p>", unsafe_allow_html=True)
 
 # ✅ Helper to collect downloads from retrieval result
 def collect_downloads(resp_obj, limit=3):
@@ -189,7 +189,7 @@ for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
 # ✅ User input and send button
-user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
+user_input = st.text_area("Ask Chucky a Question:", key="user_input", height=100)
 
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
