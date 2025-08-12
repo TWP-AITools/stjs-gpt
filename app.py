@@ -7,7 +7,7 @@ from llama_index.core.settings import Settings
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
-# --- Optional postprocessor (won't break if missing) ---
+# --- Optional postprocessor (safe if missing) ---
 try:
     from llama_index.core.postprocessor import SimilarityPostprocessor
     HAVE_SIM_POST = True
@@ -57,25 +57,19 @@ def fuzzy_ratio(a: str, b: str) -> float:
     return difflib.SequenceMatcher(a=norm(a), b=norm(b)).ratio()
 
 # ---------- Manifest (optional but recommended) ----------
-# Put a manifest.json at project root to add human titles/aliases/keywords.
-# Example:
-# [
-#   {"path":"docs/SJCounselingReferralForm.pdf","title":"Counseling Referral Form","aliases":["counseling request","student counseling"],"keywords":["counsel","referral"]},
-#   {"path":"docs/SpedReferral.pdf","title":"Special Education Referral Form","aliases":["sped referral","special ed referral"],"keywords":["idea","evaluation"]}
-# ]
 def load_manifest():
     try:
         with open("manifest.json","r",encoding="utf-8") as f:
             items = json.load(f)
     except FileNotFoundError:
-        # create from files in /docs as a fallback
+        # fallback: build from files in /docs
         items = []
-        for fn in sorted(os.listdir("docs")):
-            p = os.path.join("docs", fn)
-            if os.path.isfile(p) and p.lower().endswith((".pdf",".doc",".docx",".txt")):
-                title = os.path.splitext(os.path.basename(p))[0].replace("_"," ").replace("-"," ").title()
-                items.append({"path": p, "title": title, "aliases": [], "keywords": []})
-    # index by path and also keep a flat list
+        if os.path.isdir("docs"):
+            for fn in sorted(os.listdir("docs")):
+                p = os.path.join("docs", fn)
+                if os.path.isfile(p) and p.lower().endswith((".pdf",".doc",".docx",".txt")):
+                    title = os.path.splitext(os.path.basename(p))[0].replace("_"," ").replace("-"," ").title()
+                    items.append({"path": p, "title": title, "aliases": [], "keywords": []})
     by_path = {it["path"]: it for it in items}
     flat = items
     return by_path, flat
@@ -83,7 +77,7 @@ def load_manifest():
 MANIFEST_BY_PATH, MANIFEST = load_manifest()
 
 def best_manifest_match(user_q: str):
-    """Return (path, score, title) for the best direct match, or (None,0,None)."""
+    """Return (path, score, title) for the best direct/alias match, or (None,0,None)."""
     qn = norm(user_q)
     if not qn:
         return None, 0.0, None
@@ -92,11 +86,9 @@ def best_manifest_match(user_q: str):
     for item in MANIFEST:
         title = item.get("title") or os.path.basename(item["path"])
         cand_texts = [title] + item.get("aliases", []) + item.get("keywords", [])
-        # Include filename, too
         cand_texts.append(os.path.basename(item["path"]))
-        # Exact phrase priority
-        exact_hit = any(norm(ct) in qn or qn in norm(ct) for ct in cand_texts)
-        score = 1.1 if exact_hit else max(fuzzy_ratio(user_q, ct) for ct in cand_texts if ct) if cand_texts else 0.0
+        exact_hit = any(norm(ct) in qn or qn in norm(ct) for ct in cand_texts if ct)
+        score = 1.1 if exact_hit else max((fuzzy_ratio(user_q, ct) for ct in cand_texts if ct), default=0.0)
         if score > best[1]:
             best = (item["path"], score, title)
     return best
@@ -104,7 +96,6 @@ def best_manifest_match(user_q: str):
 # ✅ Cached document loading/indexing
 @st.cache_resource
 def load_index():
-    # Attach simple metadata (title + path) so sources are cleaner
     def file_meta(pathlike):
         p = str(pathlike).replace("\\","/")
         rec = MANIFEST_BY_PATH.get(p, {})
@@ -121,8 +112,6 @@ def load_index():
     ).load_data()
 
     index = VectorStoreIndex.from_documents(documents)
-
-    # Build a query engine with tighter retrieval
     kwargs = dict(similarity_top_k=6)
     if HAVE_SIM_POST:
         kwargs["node_postprocessors"] = [SimilarityPostprocessor(similarity_cutoff=0.72)]
@@ -176,20 +165,28 @@ def collect_downloads(resp_obj, limit=3):
         files.append((abs_path, meta.get("title") or os.path.basename(abs_path)))
     return files
 
+# ✅ Simple intent detector: only show downloads if asked
+def wants_download(user_q: str) -> bool:
+    q = (user_q or "").lower()
+    keywords = [
+        "download", "attach", "attachment", "pdf", "file", "form",
+        "link", "open the form", "printable", "save a copy", "give me the"
+    ]
+    return any(k in q for k in keywords)
+
 # ✅ Display chat history
 for turn in st.session_state.chat_history:
     st.markdown(f"<div class='response-box'><strong>You:</strong> {turn['user']}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {turn['bot']}</div>", unsafe_allow_html=True)
 
-# ✅ User input and send button
+# ✅ User input, toggle, and send button
 user_input = st.text_area("Ask Chad/Chucky a Question:", key="user_input", height=100)
+show_docs_toggle = st.toggle("Show related documents", value=False)
 
 if st.button("Send") and user_input:
     with st.spinner("Let me cook..."):
         # ---- 1) Exact/alias match pass (manifest) ----
         direct_path, direct_score, direct_title = best_manifest_match(user_input)
-
-        # If we have a strong direct match, show that file first (threshold ~0.88 if pure fuzzy)
         strong_direct = direct_path and (direct_score >= 1.0 or direct_score >= 0.88)
 
         # ---- 2) Semantic retrieval pass ----
@@ -204,6 +201,8 @@ if st.button("Send") and user_input:
                 retrieved_files = [(abs_direct, direct_title)] + retrieved_files
 
         has_downloads = len(retrieved_files) > 0
+        user_asked = wants_download(user_input)
+        show_downloads = (user_asked or show_docs_toggle) and has_downloads
 
         # ---- 3) Build LLM answer ----
         messages = [
@@ -211,9 +210,9 @@ if st.button("Send") and user_input:
                 "role": "system",
                 "content": (
                     "You are a helpful, laid-back school assistant named Chad (aka Chucky). "
-                    "Prefer exact document matches when the user names a form (e.g., title/filename/alias). "
-                    "You can reference school documents, and the app may display download buttons for relevant forms. "
-                    "If a document seems relevant, say: 'You can download the form below.' "
+                    "Prefer exact document matches when the user names a form (title/filename/alias). "
+                    "Only offer downloads if the user asks for a file/link or the UI toggle is on; "
+                    "otherwise, answer concisely without attachments. "
                     "Do NOT claim you cannot provide files."
                 )
             }
@@ -222,7 +221,6 @@ if st.button("Send") and user_input:
             messages.append({"role": "user", "content": st.session_state.chat_history[-1]["user"]})
             messages.append({"role": "assistant", "content": st.session_state.chat_history[-1]["bot"]})
 
-        # Give the model some structured context with the best-guess doc title if we have one
         direct_hint = f"\n\nLikely document: {direct_title}" if strong_direct and direct_title else ""
         messages.append({
             "role": "user",
@@ -236,25 +234,23 @@ if st.button("Send") and user_input:
         )
         answer = response.choices[0].message.content
 
-        if has_downloads:
+        # Only append the download line if we're actually showing them
+        if show_downloads:
             answer += "\n\n📎 You can download the relevant form(s) below."
 
         # ---- 4) Display answer ----
         st.session_state.chat_history.append({"user": user_input, "bot": answer})
         st.markdown(f"<div class='response-box'><strong>Chucky:</strong> {answer}</div>", unsafe_allow_html=True)
 
-        # ---- 5) Show downloads, with the direct match first if present ----
-        shown = set()
-        for abs_path, title in retrieved_files[:3]:
-            if abs_path in shown:
-                continue
-            shown.add(abs_path)
-            st.caption(f"Source: {title}")
-            mime = "application/pdf" if abs_path.lower().endswith(".pdf") else "application/octet-stream"
-            with open(abs_path, "rb") as f:
-                st.download_button(
-                    label="Download file",
-                    data=f.read(),
-                    file_name=os.path.basename(abs_path),
-                    mime=mime
-                )
+        # ---- 5) Render downloads only when requested/toggled ----
+        if show_downloads:
+            for abs_path, title in retrieved_files[:3]:
+                st.caption(f"Source: {title}")
+                mime = "application/pdf" if abs_path.lower().endswith(".pdf") else "application/octet-stream"
+                with open(abs_path, "rb") as f:
+                    st.download_button(
+                        label="Download file",
+                        data=f.read(),
+                        file_name=os.path.basename(abs_path),
+                        mime=mime
+                    )
